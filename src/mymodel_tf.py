@@ -265,7 +265,7 @@ class GenerationTF():
 
 
         kernel_size = 3
-        filters=64
+        filters=32
 
         input = tf.keras.layers.Input(shape=input_shape, name='bwunet_input')
 
@@ -423,8 +423,8 @@ def main():
 
 
     model_name = []
-    model_name.append('unetv2')
-    # model_name.append('bwunet')
+    # model_name.append('unetv2')
+    model_name.append('bwunet')
     # model_name.append('unet')
     # model_name.append('resnet_ed')
     # model_name.append('resnet_flat')

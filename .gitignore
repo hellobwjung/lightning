@@ -167,3 +167,6 @@ MNIST
 *lightning_logs*
 model_dir
 model_dir/*
+*.h5
+*.tflite
+*.json
