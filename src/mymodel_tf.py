@@ -265,7 +265,7 @@ class GenerationTF():
 
 
         kernel_size = 3
-        filters=16
+        filters=32
 
         input = tf.keras.layers.Input(shape=input_shape, name='bwunet_input')
 
