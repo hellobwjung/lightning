@@ -165,3 +165,5 @@ data
 MNIST
 *.pth
 *lightning_logs*
+model_dir
+model_dir/*
