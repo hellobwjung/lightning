@@ -102,7 +102,7 @@ def main(args):
         return files
     train_files = get_tfrecords(data_path, 'train')
     eval_files = get_tfrecords(data_path, 'valid')
-    viz_files = get_tfrecords(data_path, 'viz10')
+    viz_files = get_tfrecords(data_path, 'viz')
 
     print('data_path, ', data_path)
     print('\n'.join(train_files))
