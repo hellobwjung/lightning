@@ -140,7 +140,7 @@ def main(model_name, model_sig):
                 # exit()
                 # # pre-process # no gamma & bais for demosaic/remosaic
                 # arr_patch = arr_patch**(1/2.2)
-                # arr_patch = (arr_patch*2) -1  # (0, 1) -> (-1, 1)
+                arr_patch = (arr_patch*2) - 1  # (0, 1) -> (-1, 1)
 
                 # prediction
                 pred = model.predict(arr_patch[np.newaxis,...])
@@ -158,7 +158,7 @@ def main(model_name, model_sig):
 
         # arr_pred.astype(np.uint8)
         arr_pred = arr_pred[pad_size:-pad_size, pad_size:-pad_size, :]
-        # arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
+        arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
         img_pred = Image.fromarray((arr_pred*255).astype(np.uint8))
         # name = os.path.join(PATH_PIXELSHIFT, f'inf_{model_name}_{model_sig}_%02d.png'%(idx+1))
         name = os.path.join(PATH_VAL, f'inf_{model_name}_{model_sig}_%02d.png'%(idx+1))
@@ -166,7 +166,7 @@ def main(model_name, model_sig):
         print(np.amin(img_pred), np.amax(img_pred), np.amin(arr_pred.astype(np.uint8)), np.amax(arr_pred.astype(np.uint8)))
 
 
-        # exit()
+        exit()
 
 def run():
 

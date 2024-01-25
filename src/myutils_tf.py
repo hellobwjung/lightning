@@ -717,7 +717,7 @@ def get_training_callbacks(names, base_path, model_name=None, dataloader=None, p
                                 filepath = ckeckpoint_dir,
                                 monitor='val_loss',
                                 verbose=1,
-                                save_best_only=True,
+                                save_best_only=False,
                                 save_weights_only=False,
                                 initial_value_threshold=initial_value_threshold )
         callbacks.append(callback_ckpt)
