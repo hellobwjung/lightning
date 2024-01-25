@@ -614,7 +614,7 @@ class TensorBoardImage(Callback):
 
 
         self.idx_R = np.tile(
-                np.concatenate((np.concatenate((np.oens((cfa_pattern, cfa_pattern)), np.zeros((cfa_pattern, cfa_pattern))), axis=1),
+                np.concatenate((np.concatenate((np.ones((cfa_pattern, cfa_pattern)), np.zeros((cfa_pattern, cfa_pattern))), axis=1),
                                       np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.zeros((cfa_pattern, cfa_pattern))), axis=1)), axis=0),
                   (patch_size // 2 // cfa_pattern, patch_size // 2 // cfa_pattern))
 
