@@ -6,18 +6,6 @@ from PIL import Image
 from myutils_tf import bwutils
 
 
-def save_4ch_to_3ch(path_pixel_shift):
-    print(path_pixel_shift)
-
-    files = glob.glob(os.path.join(path_pixel_shift, '*.npy'))
-    # print(files)
-    for idx, file in enumerate(files):
-        if '3ch' not in file:
-            arr = np.load(file)
-            arr_3ch = arr[:,:,(0,1,3)]
-            file_new = file[:-4] + '_3ch.npy'
-            np.save(file_new, arr_3ch)
-
 
 def get_model(model_name, model_sig):
     base_path = os.path.join('model_dir', 'checkpoint')
@@ -39,10 +27,6 @@ def get_model(model_name, model_sig):
     # model.summary()
     return model
 
-def normalize1_and_gamma(arr, bits=16, beta=1/2.2):
-    arr = arr / (2**bits -1) # (0, 1)
-    arr = arr ** beta   # (0, 1)
-    return arr
 
 
 def main(model_name, model_sig):
