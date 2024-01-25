@@ -409,7 +409,7 @@ class bwutils():
         return image
 
 
-    def data_augmentation(self, gt, inp):
+    def data_augmentation(self, inp, gt):
 
         # flip
         if random.random() > 0.5:
@@ -425,7 +425,7 @@ class bwutils():
         gt = tf.image.rot90(gt, r)
         inp  = tf.image.rot90(inp, r)
 
-        return gt, inp
+        return inp, gt
 
 
 
@@ -468,7 +468,7 @@ class bwutils():
 
         print('<<<<<<< gt.shape', gt.shape)
 
-        return gt, inp
+        return inp, gt
 
 
 
