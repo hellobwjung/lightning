@@ -454,9 +454,9 @@ class bwutils():
         inp  = tf.cast(inp,  tf.float32) / (2**10 -1) ## <-- normalized to 1
 
         # raw 1ch to 3ch
-        print('>>>>>>> raw.shape', inp.shape)
+        print('>>>>>>> inp.shape', inp.shape)
         inp = self.get_patternized_1ch_to_3ch_image(inp)
-        print('<<<<<<< raw.shape', inp.shape)
+        print('<<<<<<< inp.shape', inp.shape)
 
         # augmentation
         if mode == tf.estimator.ModeKeys.TRAIN:
