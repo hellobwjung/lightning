@@ -211,7 +211,7 @@ def main(args):
         callbacks.append(callback_lr)
 
         # train gogo
-        more_ckpt_ratio = 1
+        more_ckpt_ratio = 10
         model.fit(dataset_train,
                     epochs=myepoch*more_ckpt_ratio,
                     steps_per_epoch=(cnt_train // (batch_size*more_ckpt_ratio)) + 1,

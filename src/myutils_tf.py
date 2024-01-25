@@ -345,6 +345,9 @@ class bwutils():
 
     def get_patternized(self, image, input_type):
 
+        print('hello patternized')
+        exit()
+
         if self.crop_size < self.patch_size:
             dim=3
             image = tf.image.random_crop(image, [self.crop_size, self.crop_size, dim])
