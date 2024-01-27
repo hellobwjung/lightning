@@ -170,3 +170,7 @@ model_dir/*
 *.h5
 *.tflite
 *.json
+onnx
+runs
+model_dir_torch
+*.onnx

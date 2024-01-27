@@ -65,7 +65,7 @@ def main(args):
 
 
     # loss_type = ['rgb', 'yuv', 'ploss'] # 'rgb', 'yuv', 'ploss'
-    loss_type = ['rgb', 'yuv', 'ssim']  # 'rgb', 'yuv', 'ploss
+    loss_type = ['rgb', 'yuv', 'dct']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['rgb']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['yuv']
 

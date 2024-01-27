@@ -424,10 +424,10 @@ def main():
 
     model_name = []
     # model_name.append('unetv2')
-    model_name.append('bwunet')
+    # model_name.append('bwunet')
     # model_name.append('unet')
-    # model_name.append('resnet_ed')
-    # model_name.append('resnet_flat')
+    model_name.append('resnet_ed')
+    model_name.append('resnet_flat')
     # model_name.append('demosaic')
     for mn in model_name:
         print('model_name = ', mn)

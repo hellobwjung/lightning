@@ -9,7 +9,7 @@ from functools import partial
 
 from tensorflow.keras.callbacks import Callback
 import numpy as np
-
+from tensorflow.python.ops.numpy_ops import np_config
 from collections import OrderedDict
 
 TETRA = 2
@@ -92,7 +92,7 @@ class bwutils():
             raise ValueError('unknown cfa_pattern, ', cfa_pattern)
 
         for lt  in loss_type:
-            if lt not in ['rgb', 'yuv', 'ploss', 'ssim']:
+            if lt not in ['rgb', 'yuv', 'ploss', 'ssim', 'dct']:
                 raise ValueError('unknown loss type, ', lt)
 
         self.cfa_pattern = cfa_pattern
@@ -153,7 +153,7 @@ class bwutils():
 
         self.idx_B = np.tile(
                 np.concatenate((np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.zeros((cfa_pattern, cfa_pattern))), axis=1),
-                                    np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.ones((cfa_pattern, cfa_pattern))), axis=1)), axis=0),
+                                       np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.ones((cfa_pattern, cfa_pattern))), axis=1)), axis=0),
                   (crop_size // 2 // cfa_pattern, crop_size // 2 // cfa_pattern))
 
         self.idx_G = np.tile(
@@ -175,20 +175,6 @@ class bwutils():
                                           self.idx_G2[..., np.newaxis]), axis=-1)
 
 
-        if 'ploss' in loss_type:
-            vgg = tf.keras.applications.vgg16.VGG16(include_top=False, weights='imagenet',
-                                                    input_shape=[crop_size,crop_size,3])
-            loss_model = tf.keras.models.Model(inputs=vgg.input, outputs=vgg.get_layer('block2_conv2').output)
-            loss_model.trainable = False
-            self.loss_model = [loss_model]
-
-            # scaling_factor =  1. / (12.75 * 12.75) #5.4 # 2.2 wo gan
-            # scaling_factor = 2. / 162.5625  # 5.4 # 2.2 wo gan
-            #self.ploss_scaling_factor = 2. / 162.5625
-            self.ploss_scaling_factor = 4. / 162.5625 # in SRGAN  MSE RGB (-1~1), ploss 1/12.75
-            if loss_mode == '1norm':
-                self.ploss_scaling_factor = np.sqrt(4. / 162.5625) # tf.keras.backend.sqrt(self.ploss_scaling_factor)
-
         print('[bwutils] input_type', input_type)
         print('[bwutils] output_type', output_type)
         print('[bwutils] cfa_pattern', cfa_pattern)
@@ -202,21 +188,6 @@ class bwutils():
         print('[bwutils] cache_enable', cache_enable)
 
 
-    def serving_input_receiver_fn(self):
-        """
-        This is used to define inputs to serve the model.
-        :return: ServingInputReciever
-        """
-        # key must be same as model input
-        reciever_tensors = OrderedDict(
-                # The size of input image is flexible.
-                [('input', tf.compat.v1.placeholder(tf.float32, [None, self.crop_size, self.crop_size, 3]))]
-        )
-
-        # Convert give inputs to adjust to the model.
-        features = reciever_tensors
-        return tf.estimator.export.ServingInputReceiver(receiver_tensors=reciever_tensors,
-                                                        features=features)
 
 
     def save_models(self, model, path, order):
@@ -256,21 +227,6 @@ class bwutils():
         return image
 
 
-    def get_image_from_single_example(self, example, key='image', num_channels=3, dtype='uint8'):
-
-        patch_size = self.patch_size
-
-        feature = {
-            key: tf.io.FixedLenFeature((), tf.string)
-        }
-
-        parsed = tf.io.parse_single_example(example, feature)
-
-        image = tf.io.decode_raw(parsed[key], out_type=dtype)
-        image = tf.cast(image, tf.float32)
-        image = tf.reshape(image, [patch_size, patch_size, num_channels])
-
-        return image
 
 
     def get_patternized_1ch_raw_image(self, image):
@@ -380,15 +336,6 @@ class bwutils():
         return image
 
 
-    def gamma(self, image):
-        alpha = self.alpha_for_gamma
-        beta = self.beta_for_gamma
-        gammas = 1 + np.random.randn(3)*alpha
-        gammas[1] = 1
-        gammas *= beta
-        image = image ** gammas
-        return image
-
 
     def add_noise_batch(self, image):
         '''
@@ -430,7 +377,29 @@ class bwutils():
 
         return inp, gt
 
+    def cure_static_bp(self, inp):
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
+        print("=============================, inp.shape", inp.shape)
 
+
+        inp = tf.make_ndarray(inp)
+        ## Red
+        for yy in range(1,inp.shape[0],4):
+            for xx in range(1, inp.shape[1], 4):
+                inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
+
+        ## Blue
+        for yy in range(3,inp.shape[0],4):
+            for xx in range(3, inp.shape[1], 4):
+                inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
+
+        return tf.convert_to_tensor(inp)
 
     def parse_tfrecord(self, example, mode):
 
@@ -455,6 +424,10 @@ class bwutils():
         # cast & normalize
         gt = tf.cast(gt, tf.float32) / (2**8 - 1)
         inp  = tf.cast(inp,  tf.float32) / (2**10 -1) ## <-- normalized to 1
+
+
+        ## cure static bp
+        inp = self.cure_static_bp(inp)
 
         # raw 1ch to 3ch
         print('>>>>>>> inp.shape', inp.shape)
@@ -508,6 +481,8 @@ class bwutils():
             loss += self.loss_fn_mse_rgb(y_true, y_pred)
         elif 'yuv' in self.loss_type:
             loss += self.loss_fn_mse_yuv(y_true, y_pred)
+        elif 'dct' in self.loss_type:
+            loss += self.loss_fn_dct_2d(y_true, y_pred)
 
 
         if 'ploss' in self.loss_type:
@@ -548,21 +523,23 @@ class bwutils():
         return rgb_mse_loss + yuv_mse_loss
 
 
-    def loss_fn_ploss(self, y_true, y_pred):
-        vgg16_perceptual_loss = 0
-
-        y_true  = y_true / (self.input_max/2) - 1
-        y_pred  = y_pred / (self.input_max/2) - 1
-        for loss_model in self.loss_model:
-            vgg16_perceptual_loss += tf.keras.backend.mean(
-                    self.loss_norm(loss_model(y_true) - loss_model(y_pred)))
-
-        return vgg16_perceptual_loss * self.ploss_scaling_factor
-
 
     def loss_fn_ssim(self, y_true, y_pred):
         ssim_loss = 1. - tf.image.ssim(y_true, y_pred, 1)
         return ssim_loss
+
+
+    def dct_2d(self, x):
+        # x0 = tf.transpose(x, [0,3,1,2])
+        x1 = tf.signal.dct(tf.transpose(x, [0,3,1,2]))
+        x2 = tf.signal.dct(tf.transpose(x1, [0,1,3,2]))
+        xf = tf.transpose(x2, [0,3,2,1] )
+        return xf
+    def loss_fn_dct_2d(self, y_true, y_pred):
+        y_true_dct = self.dct_2d(y_true)
+        y_pred_dct = self.dct_2d(y_true)
+
+        return tf.keras.losses.MeanAbsoluteError()(y_true_dct, y_pred_dct)
 
     def loss_fn_bayer(self, y_true, y_pred):
 
