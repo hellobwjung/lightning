@@ -17,17 +17,16 @@ from mydataset import give_me_dataloader, PairedDataset, give_me_transform
 from myloss import BayerLoss
 import matplotlib.pyplot as plt
 
-def save_model(modelG, ckpt_path, epoch, loss=0.0, state='valid', multigpu=0):
+def save_model(model, ckpt_path, epoch, loss=0.0, state='valid'):
     try:
-        fname = os.path.join(ckpt_path, "bwunet_epoch_%05d__loss_%05.3e.pth"%(epoch, loss))
+        os.makedirs(ckpt_path, exist_ok=True)
+        fname = os.path.join(ckpt_path, "bwunet_epoch_%05d_loss_%05.3e.pth"%(epoch, loss))
         if os.path.exists(fname):
             fname = fname.split('.pth')[0] + f'_{state}_1.pth'
-        if multigpu > 0:
-            modelG = modelG.module
-
+        print('trying to save,,,,', fname)
         torch.save(
                 {
-                    "model_state_dict": modelG.state_dict(),
+                    "model_state_dict": model.state_dict(),
                     "epoch"      : epoch,
                 },
                 fname,
@@ -175,16 +174,22 @@ def train(args):
 
 
     # ckpt save load if any
+    ckpt_list = os.listdir(checkpoint_path)
+    ckpt_list.sort()
+
     if (checkpoint_path is not None) and \
-        os.path.exists(checkpoint_path) and \
-        (len(os.listdir(checkpoint_path) ) > 0) :
-        checkpoint = torch.load(checkpoint_path, map_location=device)
+            os.path.exists(checkpoint_path) and \
+            (len(ckpt_list)) > 0:
+        ckpt_name = os.path.join(checkpoint_path, ckpt_list[-1])
+        print('Loading.....', ckpt_name)
+        checkpoint = torch.load(ckpt_name, map_location=device)
         model.load_state_dict(checkpoint["model_state_dict"])
         epoch = checkpoint["epoch"]
     else:
         os.makedirs(checkpoint_path, exist_ok=True)
         epoch = 0
 
+    # make train mode
     model.train()
 
     # # Loss
@@ -286,7 +291,8 @@ def train(args):
                 # record loss for tensorboard
                 # -----------------
                 disp[state].record([loss_G])
-                if step[state] % 100 == 0 and idx>1:
+                # if step[state] % 1 == 0 and idx>1:
+                if True:
                     avg_losses = disp[state].get_avg_losses()
                     summary.add_scalar(f"loss_G_{state}", avg_losses[0], step[state])
 
@@ -350,7 +356,7 @@ if __name__ == '__main__':
                     choices=['cpu','cuda', 'mps'],
                     help='(default=%(default)s)')
     argparser.add_argument('--input_size', type=int, help='input size', default=128)
-    argparser.add_argument('--epoch', type=int, help='epoch number', default=2)
+    argparser.add_argument('--epoch', type=int, help='epoch number', default=100)
     argparser.add_argument('--lr', type=float, help='learning rate', default=1e-3)
     argparser.add_argument('--batch_size', type=int, help='mini batch size', default=2)
     args = argparser.parse_args()
