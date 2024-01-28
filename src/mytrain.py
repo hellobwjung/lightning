@@ -104,10 +104,10 @@ def train(args):
     # dataset - train, valid, viz
     base_path = os.path.join(dataset_path)
     print('base_path: ', base_path)
-    pnames_in = glob.glob(os.path.join(base_path, 'train/pairs', "*_in.npy"))
-    pnames_gt = glob.glob(os.path.join(base_path, 'train/pairs', "*_gt.npy"))
-    pnames_viz_in = glob.glob(os.path.join(base_path, 'viz/pairs', "*_in.npy"))
-    pnames_viz_gt = glob.glob(os.path.join(base_path, 'viz/pairs', "*_gt.npy"))
+    pnames_in = glob.glob(os.path.join(base_path, 'train/pairs256', "*_in.npy"))
+    pnames_gt = glob.glob(os.path.join(base_path, 'train/pairs256', "*_gt.npy"))
+    pnames_viz_in = glob.glob(os.path.join(base_path, 'viz/pairs256', "*_in.npy"))
+    pnames_viz_gt = glob.glob(os.path.join(base_path, 'viz/pairs256', "*_gt.npy"))
 
 
     pnames_in.sort()
@@ -174,6 +174,7 @@ def train(args):
 
 
     # ckpt save load if any
+    os.makedirs(checkpoint_path, exist_ok=True)
     ckpt_list = os.listdir(checkpoint_path)
     ckpt_list.sort()
 

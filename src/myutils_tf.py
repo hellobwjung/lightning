@@ -388,18 +388,19 @@ class bwutils():
         print("=============================, inp.shape", inp.shape)
 
 
-        inp = tf.make_ndarray(inp)
-        ## Red
-        for yy in range(1,inp.shape[0],4):
-            for xx in range(1, inp.shape[1], 4):
-                inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
+        # inp = tf.make_ndarray(inp)
+        # ## Red
+        # for yy in range(1,inp.shape[0],4):
+        #     for xx in range(1, inp.shape[1], 4):
+        #         inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
+        #
+        # ## Blue
+        # for yy in range(3,inp.shape[0],4):
+        #     for xx in range(3, inp.shape[1], 4):
+        #         inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
 
-        ## Blue
-        for yy in range(3,inp.shape[0],4):
-            for xx in range(3, inp.shape[1], 4):
-                inp[yy][xx] = ((inp[yy-1][xx]+inp[yy][xx-1])/2)
-
-        return tf.convert_to_tensor(inp)
+        # return tf.convert_to_tensor(inp)
+        return inp
 
     def parse_tfrecord(self, example, mode):
 

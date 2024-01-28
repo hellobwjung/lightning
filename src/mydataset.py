@@ -10,7 +10,7 @@ import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 
 
-crop_size  = 128
+crop_size  = 256
 cfa_pattern = 2
 idx_R = np.tile(
         np.concatenate((np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.ones((cfa_pattern, cfa_pattern))), axis=1),
