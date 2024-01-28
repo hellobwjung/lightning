@@ -428,7 +428,7 @@ class bwutils():
 
 
         ## cure static bp
-        inp = self.cure_static_bp(inp)
+        # inp = self.cure_static_bp(inp)
 
         # raw 1ch to 3ch
         print('>>>>>>> inp.shape', inp.shape)

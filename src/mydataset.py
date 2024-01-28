@@ -10,7 +10,7 @@ import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 
 
-crop_size  = 256
+crop_size = 256
 cfa_pattern = 2
 idx_R = np.tile(
         np.concatenate((np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.ones((cfa_pattern, cfa_pattern))), axis=1),
@@ -177,48 +177,6 @@ class Normalization():
         return x.copy()
 
 
-def give_me_transform2(type, mean=0.5, std=0.5, isnpy=False, bits=16):
-
-    transform = None
-    if isnpy == True:
-        maxval = (2**bits) - 1
-
-
-        if type == 'train':
-            transform = transforms.Compose([
-                transforms.Lambda(Flip(0)),
-                transforms.Lambda(Flip(1)),
-                transforms.Lambda(Rot90()),
-                transforms.Lambda(Normalization(bits, mean, std)),
-
-            ])
-        else:
-            transform = transforms.Compose([
-                transforms.Lambda(Normalization(bits, mean, std)),
-            ])
-
-        return transform
-    else:
-        if type == 'train':
-            transform = transforms.Compose(
-                [
-                    # transforms.Resize((args.size, args.size)),
-                    transforms.RandomHorizontalFlip(),
-                    transforms.RandomVerticalFlip(),
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=(mean, mean, mean), std=(std, std, std)),
-                ]
-            )
-        else:
-            transform = transforms.Compose(
-                [
-                    transforms.ToTensor(),
-                    transforms.Normalize(mean=(mean, mean, mean), std=(std, std, std)),
-                ]
-            )
-    return transform
-
-
 # dataloader
 def give_me_dataloader(dataset, batch_size:int, shuffle=True, num_workers=2, drop_last=False):
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
@@ -276,6 +234,8 @@ class PairedDataset(DataLoader):
         item_in = ((item_in / 1023.) * 2) - 1
         item_gt = ((item_gt /  255.) * 2) - 1
 
+        # cure static bp in in
+        item_in = self.cure_static_bp(item_in)
 
         # ## transforms
         seed = np.random.randint(8)
@@ -287,7 +247,20 @@ class PairedDataset(DataLoader):
         item_gt = item_gt.transpose(2, 0, 1)
 
         return [item_in, item_gt]
+    def cure_static_bp(self, item):
 
+        # inp = tf.make_ndarray(inp)
+        ## Red
+        for yy in range(1,item.shape[0],4):
+            for xx in range(1, item.shape[1], 4):
+                item[yy][xx] = ((item[yy-1][xx]+item[yy][xx-1])/2)
+
+        ## Blue
+        for yy in range(3,item.shape[0],4):
+            for xx in range(3, item.shape[1], 4):
+                item[yy][xx] = ((item[yy-1][xx]+item[yy][xx-1])/2)
+
+        return item
     def mytransform(self, image, seed):
         rot = seed & 3
         isMirror = (seed>>2) & 1

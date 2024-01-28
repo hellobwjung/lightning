@@ -91,7 +91,7 @@ def train(args):
     # args
     model_name      = 'bwunet'
     dataset_path    = '/Users/bw/Dataset/MIPI_demosaic_hybridevs'
-    input_size      = 128
+    input_size      = 256
     batch_size      = 128
     learning_rate   = 1e-4
     checkpoint_path = 'model_dir_torch/ckpt'
@@ -166,7 +166,7 @@ def train(args):
 
 
     # save onnx
-    dummy_input = torch.randn(1, 3, 128, 128, device=device, requires_grad=False)
+    dummy_input = torch.randn(1, 3, input_size, input_size, device=device, requires_grad=False)
     with torch.no_grad():
         os.makedirs('onnx', exist_ok=True)
         torch.onnx.export(model.eval(), dummy_input,
