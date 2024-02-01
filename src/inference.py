@@ -6,6 +6,14 @@ from PIL import Image
 from myutils_tf import bwutils
 
 
+cfa_pattern = 2
+crop_size = 8
+
+idx_R = np.tile(
+        np.concatenate((np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.ones((cfa_pattern, cfa_pattern))), axis=1),
+                              np.concatenate((np.zeros((cfa_pattern, cfa_pattern)), np.zeros((cfa_pattern, cfa_pattern))), axis=1)), axis=0),
+                        (crop_size // 2 // cfa_pattern, crop_size // 2 // cfa_pattern))
+
 
 def get_model(model_name, model_sig):
     base_path = os.path.join('model_dir', 'checkpoint')
@@ -28,6 +36,56 @@ def get_model(model_name, model_sig):
     return model
 
 
+def cure_static_bp(arr_patch):
+    ## Red
+    for yy in range(1, arr_patch.shape[0], 4):
+        for xx in range(1, arr_patch.shape[1], 4):
+            arr_patch[yy][xx] = ((arr_patch[yy - 1][xx] + arr_patch[yy][xx - 1]) / 2)
+
+    ## Blue
+    for yy in range(3, arr_patch.shape[0], 4):
+        for xx in range(3, arr_patch.shape[1], 4):
+            arr_patch[yy][xx] = ((arr_patch[yy - 1][xx] + arr_patch[yy][xx - 1]) / 2)
+    return arr_patch
+
+
+def cure_dynamic_bp(arr_patch):
+    #   R R G G R R G G  |  O O X X O O X X
+    #   R R G G R R G G  |  O O X X O O X X
+    #   G G B B G G B B  |  X X O O X X O O
+    #   G G B B G G B B  |  X X O O X X O O
+    #   R R G G R R G G  |  O O X X O O X X
+    #   R R G G R R G G  |  O O X X O O X X
+    #   G G B B G G B B  |  X X O O X X O O
+    #   G G B B G G B B  |  X X O O X X O O
+
+
+    # print('-->', idx_R>0)
+    for yy in range(0, arr_patch.shape[0]-8, 2):
+        for xx in range(0, arr_patch.shape[1]-8, 2):
+            sy = yy
+            ey = sy+8
+            sx = xx
+            ex = sx+8
+            patch = arr_patch[sy:ey, sx:ex]
+
+            red = patch[idx_R > 0]
+            red.sort()
+            median = int(np.median(red))
+            if np.abs(red[-1] - red[-2]) > (64/1023):
+                # idx = patch[(patch == red[-1]) & (idx_R == 1)]
+                # patch[idx] = median
+                patch[(patch == red[-1]) & (idx_R >0)] = median
+
+                # print('hello dynamic bp')
+                # exit()
+
+            arr_patch[sy:ey, sx:ex] = patch
+
+    return arr_patch
+
+
+
 
 def main(model_name, model_sig):
     # model name
@@ -48,9 +106,11 @@ def main(model_name, model_sig):
 
 
     # test data
-    PATH_VAL = '/Users/bw/Dataset/MIPI_demosaic_hybridevs/val/input'
+    PATH_VAL = '/Users/bw/Dataset/MIPI_demosaic_hybridevs/val/input_cure'
     files = glob.glob(os.path.join(PATH_VAL, '*.npy'))
-    pad_size = 32
+    files.sort()
+    pad_size = cell_size*(8-1)
+    pad_size= 8
     patch_size = 128
 
 
@@ -76,7 +136,7 @@ def main(model_name, model_sig):
     for idx, file in enumerate(files):
         arr = np.load(file)    # (0, 65535)
         arr = arr / (2**10 -1) # (0, 1)
-        arr = arr * 2 -1
+        # arr = arr * 2 -1
         # arr = arr ** (1/2.2)   # (0, 1)
 
 
@@ -85,6 +145,8 @@ def main(model_name, model_sig):
         arr = np.pad(arr, ((pad_size, pad_size), (pad_size, pad_size)), 'symmetric')
         print('arr.shape', arr.shape)
 
+        assert arr.shape[0]%4 == 0 and arr.shape[1]%4 == 0, f'{idx}, arr shape not in multiple of 4'
+        # continue
         # break
 
         height, width = arr.shape
@@ -117,8 +179,24 @@ def main(model_name, model_sig):
                     ex = width-1
                     sx = width-patch_size-1
 
+
                 arr_patch = arr[sy:ey, sx:ex]
+
+                ####################################################################################
+                ####################################################################################
+                # cure static bp
+                # arr_patch = cure_static_bp(arr_patch)
+
+                # cure dynamic bp
+                arr_patch = cure_dynamic_bp(arr_patch)
+                ####################################################################################
+                ####################################################################################
+
+
                 arr_patch = utils.get_patternized_1ch_to_3ch_image(arr_patch)
+
+
+
 
                 # print(np.amin(arr_patch), np.amax(arr_patch) )
                 # exit()
@@ -145,12 +223,12 @@ def main(model_name, model_sig):
         arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
         img_pred = Image.fromarray((arr_pred*255).astype(np.uint8))
         # name = os.path.join(PATH_PIXELSHIFT, f'inf_{model_name}_{model_sig}_%02d.png'%(idx+1))
-        name = os.path.join(PATH_VAL, f'inf_{model_name}_{model_sig}_%02d.png'%(idx+1))
+        name = os.path.join(PATH_VAL, f'%04d.png'%(idx+801))
         img_pred.save(name)
         print(np.amin(img_pred), np.amax(img_pred), np.amin(arr_pred.astype(np.uint8)), np.amax(arr_pred.astype(np.uint8)))
 
 
-        exit()
+        # exit()
 
 def run():
 

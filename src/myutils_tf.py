@@ -227,8 +227,6 @@ class bwutils():
         return image
 
 
-
-
     def get_patternized_1ch_raw_image(self, image):
         patternized = self.get_patternized_3ch_image(image)
         patternized = tf.expand_dims(tf.reduce_sum(patternized, axis=-1), axis=-1)
