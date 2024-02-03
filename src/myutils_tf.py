@@ -335,26 +335,30 @@ class bwutils():
 
 
 
-    def add_noise_batch(self, image):
+    def add_noise_batch(self, inp, gt):
         '''
         image ~ (-1,1) normalized
         '''
-        noise_gaussian = tf.random.normal(image.shape) / 256.
+        noise_gaussian_inp = tf.random.normal(tf.shape(inp)) / 256.
+        noise_gaussian_gt = tf.random.normal(tf.shape(gt)) / 256.
         # noise_gaussian = self.scale_by_input_max(noise_gaussian)
 
-        noise_poisson = tf.random.normal(image.shape) * tf.math.sqrt(tf.math.abs(image)) / 256.
+        noise_poisson_inp = tf.random.normal(tf.shape(inp)) * tf.math.sqrt(tf.math.abs(inp)) / 256.
+        noise_poisson_gt = tf.random.normal(tf.shape(gt)) * tf.math.sqrt(tf.math.abs(gt)) / 256.
         # noise_poisson = self.scale_by_input_max(noise_poisson)
         print('------------------------------------------')
         print('------------------------------------------')
         print('------------------------------------------')
         print('------------------------------------------')
-        print('noise_poisson.shape', noise_poisson.shape)
+        print('shape', noise_poisson_inp.shape, noise_poisson_gt.shape)
 
-        image = image + noise_gaussian + noise_poisson
+        inp = inp + noise_gaussian_inp + noise_poisson_inp
+        gt  = gt  + noise_gaussian_gt  + noise_poisson_gt
 
-        image = tf.clip_by_value(image, -1, 1)
-        print('image.shape', image.shape)
-        return image
+        inp = tf.clip_by_value(inp, -1, 1)
+        gt  = tf.clip_by_value(gt , -1, 1)
+
+        return inp, gt
 
 
     def data_augmentation(self, inp, gt):
