@@ -337,13 +337,13 @@ class bwutils():
 
     def add_noise_batch(self, image):
         '''
-        image ~ (0,1) normalized
+        image ~ (-1,1) normalized
         '''
-        noise_gaussian = tf.random.normal(image.shape) * self.input_bits
-        noise_gaussian = self.scale_by_input_max(noise_gaussian)
+        noise_gaussian = tf.random.normal(image.shape) / 256.
+        # noise_gaussian = self.scale_by_input_max(noise_gaussian)
 
-        noise_poisson = tf.random.normal(image.shape) * tf.math.sqrt(image) * self.input_bits
-        noise_poisson = self.scale_by_input_max(noise_poisson)
+        noise_poisson = tf.random.normal(image.shape) * tf.math.sqrt(tf.math.abs(image)) / 256.
+        # noise_poisson = self.scale_by_input_max(noise_poisson)
         print('------------------------------------------')
         print('------------------------------------------')
         print('------------------------------------------')
@@ -352,7 +352,7 @@ class bwutils():
 
         image = image + noise_gaussian + noise_poisson
 
-        image = tf.clip_by_value(image, 0, 1)
+        image = tf.clip_by_value(image, -1, 1)
         print('image.shape', image.shape)
         return image
 
@@ -464,7 +464,7 @@ class bwutils():
 
         dataset = dataset.batch(params['batch'])
 
-        # dataset = dataset.map(self.add_noise_batch)
+        dataset = dataset.map(self.add_noise_batch)
         dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
         return dataset
