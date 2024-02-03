@@ -8,5 +8,5 @@ os.chdir(file_path)
 
 cwd = os.getcwd()
 print(cwd)
-shutil.make_archive('submit0201_2','zip','submit0201_2')
+shutil.make_archive('submit0202','zip','submit0202')
 

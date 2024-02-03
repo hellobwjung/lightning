@@ -174,3 +174,8 @@ onnx
 runs
 model_dir_torch
 *.onnx
+*.png
+*.jpg
+*.gif
+*.bmp
+

@@ -139,10 +139,24 @@ def main(model_name, model_sig):
         # arr = arr * 2 -1
         # arr = arr ** (1/2.2)   # (0, 1)
 
+        ## padding
+        h, w = arr.shape
+        PAD_SIZE_FULL = 128  # 64#
+        PAD_NUM = 8
+        PAD_SIZE = PAD_NUM * 2
+        psize = PAD_SIZE_FULL - PAD_SIZE
+
+        PAD_F = PAD_NUM
+        PAD_H = PAD_SIZE_FULL - (PAD_F + h) % psize
+        PAD_W = PAD_SIZE_FULL - (PAD_F + w) % psize
+
+        p2d = ((PAD_F, PAD_H), (PAD_F, PAD_W))
+
 
 
         print('arr.shape', arr.shape)
-        arr = np.pad(arr, ((pad_size, pad_size), (pad_size, pad_size)), 'symmetric')
+        arr = np.pad(arr, p2d, 'reflect')
+        # arr = np.pad(arr, ((pad_size, pad_size), (pad_size, pad_size)), 'symmetric')
         print('arr.shape', arr.shape)
 
         assert arr.shape[0]%4 == 0 and arr.shape[1]%4 == 0, f'{idx}, arr shape not in multiple of 4'
