@@ -34,7 +34,7 @@ MODEL_NAME = __file__.split('.')[0]  # 'model_tetra_out_model_tetra_12ch'
 
 
 # for Adam
-LEARNING_RATE = 2e-3
+LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-8
 INTERVAL = 600
 
@@ -48,11 +48,11 @@ def init_variables():
 
 def main(args):
 
-    input_type = 'rgb'
+    input_type = 'nonshrink'
 
     # update params. using input arguments
     input_type = args.input_type
-    patch_size =  args.patch_size
+    patch_size = args.patch_size
     batch_size = args.batch_size
     constraint_max = args.constraint_max
     input_max = args.input_max
@@ -65,15 +65,11 @@ def main(args):
 
 
     # loss_type = ['rgb', 'yuv', 'ploss'] # 'rgb', 'yuv', 'ploss'
-    loss_type = ['rgb', 'yuv', 'dct']  # 'rgb', 'yuv', 'ploss
+    loss_type = ['rgb', 'yuv', 'ssim', 'dct']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['rgb']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['yuv']
 
     # get util class
-    if args.test:
-        cache_enable=False
-    else:
-        cache_enable=True
 
     utils = bwutils(input_type,
                     cfa_pattern='tetra',
@@ -83,7 +79,7 @@ def main(args):
                     loss_type=loss_type, # 'rgb', 'yuv', 'ploss'
                     loss_mode='2norm',
                     loss_scale=1e4,
-                    cache_enable=cache_enable)
+                    cache_enable=False)
 
 
 
@@ -94,8 +90,6 @@ def main(args):
 
 
     ## dataset
-    if args.test:
-        data_path = 'datasets/pixelshift/tfrecords'
     def get_tfrecords(path, keyword):
         files = tf.io.gfile.glob(os.path.join(path, f'*{keyword}*tfrecords'))
         files.sort()
@@ -117,38 +111,41 @@ def main(args):
     print('=========================================================')
     print('========================================================= NGPU', NGPU)
 
-    if args.test:
-        batch_size = 1
+    # if args.test:
+    #     batch_size = 1
     batch_size      = batch_size * NGPU  # 128
     batch_size_eval = batch_size * NGPU
     batch_size_viz  = batch_size  # 128
     batch_size_viz  = 10
     print(batch_size, batch_size_eval, batch_size_viz)
     # exit()
+
+    train_type = 'single'
+    # train_type = 'pair'
     train_params = {'filenames': train_files,
                     'mode': tf.estimator.ModeKeys.TRAIN,
+                    'train_type': train_type,
                     'threads': 2,
                     'shuffle_buff': 128,
                     'batch': batch_size,
                     'input_type':input_type,
-                    'train_type': 'unprocessing'
                     }
     eval_params = {'filenames': eval_files,
                    'mode': tf.estimator.ModeKeys.EVAL,
+                   'train_type': train_type,
                    'threads': 2,
                    'shuffle_buff': 128,
                    'batch': batch_size_eval,
                    'input_type': input_type,
-                   'train_type': 'unprocessing'
                    }
 
     viz_params = {'filenames': viz_files,
                    'mode': tf.estimator.ModeKeys.EVAL,
+                  'train_type': train_type,
                    'threads': 2,
                    'shuffle_buff': 128,
                    'batch': batch_size_viz,
                    'input_type': input_type,
-                   'train_type': 'unprocessing'
                    }
 
     dataset_train = utils.dataset_input_fn(train_params)
@@ -158,14 +155,13 @@ def main(args):
     # print('train set len : ', tf.data.experimental.cardinality(dataset_train))
     # print('train set len : ', dataset_train.element_spec)
 
+    cnt_train, cnt_valid = 260000, 6000 # MIT
+    # cnt_train, cnt_valid = 7080*19+ 7096, 7096 # DIV2k
+    # if args.test:
+    #     cnt_train, cnt_valid = 8, 8 # for test
 
-
-    cnt_train, cnt_valid = 7080*19, 7096 # with noise
-    if args.test:
-        cnt_train, cnt_valid = 8, 8 # for test
 
     cnt_viz = 10
-
 
     #########################
     ## training gogo
@@ -230,13 +226,13 @@ if __name__ == '__main__':
     parser.add_argument(
             '--input_type',
             type=str,
-            default='rgb',
+            default='nonshrink',
             help='shrink / nonshrink / nonshrink_4ch. default:nonshrink_4ch')
 
     parser.add_argument(
             '--input_max',
             type=float,
-            default=1,
+            default=255,
             help='input_max')
 
     parser.add_argument(
@@ -279,7 +275,8 @@ if __name__ == '__main__':
             '--data_path',
             type=str,
             # default='/content/drive/MyDrive/Datasets/MIPI_tetra_hybridenvs/train/tfrecords',
-            default='/Users/bw/Dataset/MIPI_demosaic_hybridevs/train/tfrecords',
+            # default='/Users/bw/Dataset/MIPI_demosaic_hybridevs/train/tfrecords',
+            default='/Users/bw/Dataset/MIT/tfrecords',
             help='tfrecords dataset path')
 
     parser.add_argument(

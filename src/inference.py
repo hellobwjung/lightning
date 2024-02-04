@@ -248,6 +248,7 @@ def run():
 
     args = [
             {'model_name':'bwunet', 'model_sig':'noise'}
+            # {'model_name':'bwunet_delta', 'model_sig':'noise'}
             ]
     for arg in args:
         model_name = arg['model_name']

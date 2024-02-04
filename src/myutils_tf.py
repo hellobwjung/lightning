@@ -62,7 +62,7 @@ def load_checkpoint_if_exists(model, model_dir, model_name, ckpt_name=None):
 class bwutils():
 
     def __init__(self,
-                input_type='rgb',
+                input_type='nonshrink',
                 output_type='data_only', # 'data_only', 'data_with_mask'
                 cfa_pattern='tetra',
                 file_type='tfrecord',
@@ -220,10 +220,21 @@ class bwutils():
         open(path + '.json', 'w').write(model_json)
 
 
-    def data_augmentation(self, image):
-        image = tf.image.random_flip_left_right(image)
-        image = tf.image.random_flip_up_down(image)
-        image = tf.image.rot90(image, np.random.randint(4))
+
+    def get_image_from_single_example(self, example, key='image', num_channels=3, dtype='uint8'):
+
+        patch_size = self.patch_size
+
+        feature = {
+            key: tf.io.FixedLenFeature((), tf.string)
+        }
+
+        parsed = tf.io.parse_single_example(example, feature)
+
+        image = tf.io.decode_raw(parsed[key], out_type=dtype)
+        image = tf.cast(image, tf.float32)
+        image = tf.reshape(image, [patch_size, patch_size, num_channels])
+
         return image
 
 
@@ -297,10 +308,10 @@ class bwutils():
 
 
 
-    def get_patternized(self, image, input_type):
+    def get_patternized(self, image, input_type='nonshrink'):
 
         print('hello patternized')
-        exit()
+        # exit()
 
         if self.crop_size < self.patch_size:
             dim=3
@@ -339,8 +350,8 @@ class bwutils():
         '''
         image ~ (-1,1) normalized
         '''
-        noise_gaussian_inp = tf.random.normal(tf.shape(inp)) / 256.
-        noise_gaussian_gt = tf.random.normal(tf.shape(gt)) / 256.
+        noise_gaussian_inp = tf.random.normal(tf.shape(inp)) / 255.
+        noise_gaussian_gt = tf.random.normal(tf.shape(gt)) / 255.
         # noise_gaussian = self.scale_by_input_max(noise_gaussian)
 
         noise_poisson_inp = tf.random.normal(tf.shape(inp)) * tf.math.sqrt(tf.math.abs(inp)) / 256.
@@ -361,6 +372,9 @@ class bwutils():
         return inp, gt
 
 
+
+
+
     def data_augmentation(self, inp, gt):
 
         # flip
@@ -378,6 +392,12 @@ class bwutils():
         inp  = tf.image.rot90(inp, r)
 
         return inp, gt
+
+    def data_augmentation1(self, image):
+        image = tf.image.random_flip_left_right(image)
+        image = tf.image.random_flip_up_down(image)
+        image = tf.image.rot90(image, np.random.randint(4))
+        return image
 
     def cure_static_bp(self, inp):
         print("=============================, inp.shape", inp.shape)
@@ -449,13 +469,39 @@ class bwutils():
 
         return inp, gt
 
+    def parse_tfrecord_single(self, example, mode):
+        image = self.get_image_from_single_example(example, key='image', num_channels=3)
+
+        if mode == tf.estimator.ModeKeys.TRAIN:
+            image = self.data_augmentation1(image)
+
+        image = self.scale_by_input_max(image) # normalized  (0, 1)
+        image = tf.clip_by_value(image, 0, 1)
+
+        if self.input_bias:
+            image = (image * 2) - 1 # (0, 1) -->  (-1, 1)
+
+        patternized = self.get_patternized(image, self.input_type)
+
+        print('====================== patternized.shape ', patternized.shape)
+        print('====================== image.shape ', image.shape)
+
+
+        return patternized, image
+
 
 
     def dataset_input_fn(self, params):
 
         dataset = tf.data.TFRecordDataset(params['filenames'])
-        parse_fn = self.parse_tfrecord
-
+        if params['train_type'] == 'pair':
+            parse_fn = self.parse_tfrecord
+        elif params['train_type'] == 'single':
+            parse_fn = self.parse_tfrecord_single
+        else:
+            ValueError("unknown mode, ", params['mode'])
+            # exit()
+        print('-------->, ', params['train_type'])
         dataset = dataset.map(partial(parse_fn, mode=params['mode']),
                               num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
@@ -697,7 +743,7 @@ def get_training_callbacks(names, base_path, model_name=None, dataloader=None, p
                                 filepath = ckeckpoint_dir,
                                 monitor='val_loss',
                                 verbose=1,
-                                save_best_only=False,
+                                save_best_only=True,
                                 save_weights_only=False,
                                 initial_value_threshold=initial_value_threshold )
         callbacks.append(callback_ckpt)
