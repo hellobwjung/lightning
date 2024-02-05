@@ -359,7 +359,7 @@ class bwutils():
         # noise_poisson = self.scale_by_input_max(noise_poisson)
 
         # hot bp in input image ~ 1%
-        mask = tf.random.normal(tf.shape(inp)) > 2.33
+        mask = tf.random.normal(tf.shape(inp)) > 2.33 # z=2.33 ~ .4901
 
 
 
@@ -370,8 +370,8 @@ class bwutils():
         print('shape', noise_poisson_inp.shape, noise_poisson_gt.shape)
 
         inp = inp + noise_gaussian_inp + noise_poisson_inp
-        inp[mask] = 1
-        
+        inp = inp + tf.cast(mask, tf.float32)
+
         gt  = gt  + noise_gaussian_gt  + noise_poisson_gt
 
         inp = tf.clip_by_value(inp, -1, 1)
