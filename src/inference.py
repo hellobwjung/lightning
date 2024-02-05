@@ -2,7 +2,7 @@ import os, glob, math
 import numpy as np
 import tensorflow as tf
 from PIL import Image
-
+import matplotlib.pyplot as plt
 from myutils_tf import bwutils
 
 
@@ -119,7 +119,7 @@ def main(model_name, model_sig):
                     cfa_pattern=cfa_pattern,
                     patch_size=patch_size,
                     crop_size=patch_size,
-                    input_max=1,
+                    input_max=255,
                     use_unprocess=False,
                     loss_type=['rgb'],
                     loss_mode='2norm',
@@ -127,7 +127,7 @@ def main(model_name, model_sig):
                     cache_enable=False)
 
 
-
+    # exit()
 
     # shape = np.load(files[0]).shape
     # height, width, channels = np.load(files[0]).shape
@@ -138,6 +138,9 @@ def main(model_name, model_sig):
         arr = arr / (2**10 -1) # (0, 1)
         # arr = arr * 2 -1
         # arr = arr ** (1/2.2)   # (0, 1)
+
+        # print('min, max, ', np.amin(arr), np.amax(arr))
+        # exit()
 
         ## padding
         h, w = arr.shape
@@ -199,7 +202,7 @@ def main(model_name, model_sig):
                 ####################################################################################
                 ####################################################################################
                 # cure static bp
-                # arr_patch = cure_static_bp(arr_patch)
+                arr_patch = cure_static_bp(arr_patch)
 
                 # cure dynamic bp
                 arr_patch = cure_dynamic_bp(arr_patch)
@@ -222,6 +225,22 @@ def main(model_name, model_sig):
                 pred = model.predict(arr_patch[np.newaxis,...])
                 # print(pred.shape)
 
+
+                # plt.figure(1)
+                #
+                # plt.subplot(1,2,1)
+                # plt.imshow( (arr_patch+1)/2 )
+                #
+                # plt.subplot(1,2,2)
+                # plt.imshow(((pred[0] + 1) / 2)*255)
+                #
+                # print('min1, max1, ', np.amin(arr_patch), np.amax(arr_patch))
+                # print('min2, max2, ', np.amin(pred), np.amax(pred))
+                # # exit()
+                #
+                # plt.show()
+
+
                 # exit()
 
                 # post-process
@@ -242,12 +261,13 @@ def main(model_name, model_sig):
         print(np.amin(img_pred), np.amax(img_pred), np.amin(arr_pred.astype(np.uint8)), np.amax(arr_pred.astype(np.uint8)))
 
 
-        # exit()
+        exit()
 
 def run():
 
     args = [
-            {'model_name':'bwunet', 'model_sig':'noise'}
+            # {'model_name':'bwunet', 'model_sig':'noise'}
+            {'model_name': 'bwunet', 'model_sig': 'single'}
             # {'model_name':'bwunet_delta', 'model_sig':'noise'}
             ]
     for arg in args:
