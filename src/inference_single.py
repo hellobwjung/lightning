@@ -72,10 +72,11 @@ def cure_dynamic_bp(arr_patch):
             red = patch[idx_R > 0]
             red.sort()
             median = int(np.median(red))
-            if np.abs(red[-1] - red[-2]) > (64/1023):
+            if np.abs(red[-1] - red[-2]) > (128/1023):
                 # idx = patch[(patch == red[-1]) & (idx_R == 1)]
                 # patch[idx] = median
-                patch[(patch == red[-1]) & (idx_R >0)] = median
+                patch[(patch == red[-1]) & (idx_R > 0)] = median
+                patch[(patch == red[-2]) & (idx_R > 0)] = median
 
                 # print('hello dynamic bp')
                 # exit()
@@ -109,8 +110,8 @@ def main(model_name, model_sig):
     PATH_VAL = '/Users/bw/Dataset/MIPI_demosaic_hybridevs/val/input_cure'
     files = glob.glob(os.path.join(PATH_VAL, '*.npy'))
     files.sort()
-    pad_size = cell_size*(8-1)
-    pad_size= 8
+    # pad_size = cell_size*(8-1)
+
     patch_size = 128
 
 
@@ -136,38 +137,35 @@ def main(model_name, model_sig):
     for idx, file in enumerate(files):
         arr = np.load(file)    # (0, 65535)
         arr = arr / (2**10 -1) # (0, 1)
-        # arr = arr / (2**8 -1) # (0, 1)
-        # arr = arr * 2 -1
-        # arr = arr ** (1/2.2)   # (0, 1)
+        arr = arr * 2 -1
 
         # print('min, max, ', np.amin(arr), np.amax(arr))
         # exit()
 
         ## padding
-        h, w = arr.shape
-        PAD_SIZE_FULL = 128  # 64#
-        PAD_NUM = 8
-        PAD_SIZE = PAD_NUM * 2
-        psize = PAD_SIZE_FULL - PAD_SIZE
-
-        PAD_F = PAD_NUM
-        PAD_H = PAD_SIZE_FULL - (PAD_F + h) % psize
-        PAD_W = PAD_SIZE_FULL - (PAD_F + w) % psize
-
-        p2d = ((PAD_F, PAD_H), (PAD_F, PAD_W))
-
-
-
+        height, width = arr.shape
+        # PAD_SIZE_FULL = 128  # 128
+        pad_size = 16
         print('arr.shape', arr.shape)
-        arr = np.pad(arr, p2d, 'reflect')
+
+        # pad width
+        arr = np.concatenate([arr[:, cell_size+pad_size:cell_size:-1],
+                                     arr,
+                                     arr[:, -cell_size-1 : -cell_size-pad_size - 1 :-1]], axis=1)
+
+        # pad height
+        arr = np.concatenate([arr[ cell_size+pad_size:cell_size:-1, :],
+                                     arr,
+                                     arr[ -cell_size-1 : -cell_size-pad_size - 1 :-1, :]], axis=0)
+
+
         # arr = np.pad(arr, ((pad_size, pad_size), (pad_size, pad_size)), 'symmetric')
         print('arr.shape', arr.shape)
-
+        # exit()
         assert arr.shape[0]%4 == 0 and arr.shape[1]%4 == 0, f'{idx}, arr shape not in multiple of 4'
         # continue
         # break
 
-        height, width = arr.shape
         npatches_y = math.ceil((height+2*pad_size) / (patch_size-2*pad_size))
         npatches_x = math.ceil((width +2*pad_size) / (patch_size-2*pad_size))
 
@@ -177,25 +175,35 @@ def main(model_name, model_sig):
         arr_pred = np.zeros(arr.shape + (3,) )
         print(idx, file, arr.shape, arr_pred.shape)
         # exit()
+
+
         cnt=0
         tcnt= npatches_x*npatches_y
         for idx_y in range(npatches_y):
             for idx_x  in range(npatches_x):
                 if(cnt%10==0):
-                    print(f'{cnt} / {tcnt}')
+                    print(f'{idx}: {cnt} / {tcnt}')
                 cnt+=1
-                sy = idx_y * (patch_size-2*pad_size)
+
+
+
+                sy = idx_y * (patch_size - 2 * pad_size)
                 ey = sy + patch_size
-                sx = idx_x * (patch_size-2*pad_size)
+                sx = idx_x * (patch_size - 2 * pad_size)
                 ex = sx + patch_size
+
 
                 if ey >= height:
                     ey = height-1
                     sy = height-patch_size-1
 
+
                 if ex >= width:
                     ex = width-1
                     sx = width-patch_size-1
+
+                    # print('hello over (sx, ex)', sx, ex)
+                    # exit()
 
 
                 arr_patch = arr[sy:ey, sx:ex]
@@ -206,7 +214,7 @@ def main(model_name, model_sig):
                 arr_patch = cure_static_bp(arr_patch)
 
                 # cure dynamic bp
-                # arr_patch = cure_dynamic_bp(arr_patch)
+                arr_patch = cure_dynamic_bp(arr_patch)
                 ####################################################################################
                 ####################################################################################
 
@@ -223,53 +231,28 @@ def main(model_name, model_sig):
                 # arr_patch = (arr_patch*2) - 1  # (0, 1) -> (-1, 1)
 
                 # prediction
-                pred = model.predict(arr_patch[np.newaxis,...])
+                pred = model.predict(arr_patch[np.newaxis,...], verbose=0)
                 # print(pred.shape)
 
 
-                plt.figure(1)
-
-                # plt.subplot(1,2,1)
-                # plt.imshow( (arr_patch+1)/2 )
-                #
-                # plt.subplot(1,2,2)
-                # plt.imshow(((pred[0] + 1) / 2)*255)
-
-                # plt.subplot(1, 2, 1)
-                # plt.imshow((arr_patch ))
-                #
-                # plt.subplot(1, 2, 2)
-                # plt.imshow(((pred[0])))
-
-
-                # print('min1, max1, ', np.amin(arr_patch), np.amax(arr_patch))
-                # print('min2, max2, ', np.amin(pred), np.amax(pred))
-                # # exit()
-                #
-                # plt.show()
-
-
-                # exit()
-
                 # post-process
-                arr_pred[sy+pad_size:ey-pad_size, sx+pad_size:ex-pad_size, :] = \
-                            pred[0, pad_size:-pad_size, pad_size:-pad_size, :]
-                            #  (pred[0, pad_size:-pad_size, pad_size:-pad_size, :]+1)/2 #  (-1, 1) -> (0, 1)
-                print(np.amin(arr_patch), np.amax(arr_patch), np.amin(arr_pred), np.amax(arr_pred))
+                arr_pred[sy + pad_size:ey - pad_size, sx + pad_size:ex - pad_size, :] = \
+                    pred[0, pad_size:-pad_size, pad_size:-pad_size, :]
+
                 # exit()
         # exit()
 
         # arr_pred.astype(np.uint8)
         arr_pred = arr_pred[pad_size:-pad_size, pad_size:-pad_size, :]
-        # arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
-        img_pred = Image.fromarray((arr_pred*255).astype(np.uint8))
+        arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
+        img_pred = Image.fromarray((arr_pred*255 + 0.5).astype(np.uint8))
         # name = os.path.join(PATH_PIXELSHIFT, f'inf_{model_name}_{model_sig}_%02d.png'%(idx+1))
         name = os.path.join(PATH_VAL, f'%04d.png'%(idx+801))
         img_pred.save(name)
         print(np.amin(img_pred), np.amax(img_pred), np.amin(arr_pred.astype(np.uint8)), np.amax(arr_pred.astype(np.uint8)))
 
 
-        exit()
+        # exit()
 
 def run():
 
