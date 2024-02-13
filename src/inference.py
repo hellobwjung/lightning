@@ -105,7 +105,8 @@ def main(model_name, model_sig):
     PATH_VAL = '/Users/bw/Dataset/MIPI_demosaic_hybridevs/val/input_cure'
     files = glob.glob(os.path.join(PATH_VAL, '*.npy'))
     files.sort()
-    pad_size= 8
+    pad_size = 8
+    # pad_size = 0
     patch_size = 128
 
 
@@ -218,12 +219,12 @@ def main(model_name, model_sig):
 
 
                 if ey >= height:
-                    ey = height-1
-                    sy = height-patch_size-1
+                    ey = height
+                    sy = height - patch_size
 
                 if ex >= width:
-                    ex = width-1
-                    sx = width-patch_size-1
+                    ex = width
+                    sx = width - patch_size
 
 
                 arr_patch = arr[sy:ey, sx:ex]
@@ -251,17 +252,27 @@ def main(model_name, model_sig):
 
 
                 # post-process
-                arr_pred[sy+pad_size:ey-pad_size, sx+pad_size:ex-pad_size, :] = \
-                            pred[0, pad_size:-pad_size, pad_size:-pad_size, :]
+                if pad_size == 0:
+                    arr_pred[sy:ey, sx:ex, :] = pred[0]
+                else:
+                    pass
+                    arr_pred[sy+pad_size:ey-pad_size, sx+pad_size:ex-pad_size, :] = \
+                                pred[0, pad_size:-pad_size, pad_size:-pad_size, :]
+
+
+
                 # exit()
         # exit()
 
-        arr_pred = arr_pred[pad_size:-pad_size, pad_size:-pad_size, :]
-        arr_pred = (arr_pred+1) / 2 # normalized from (-1, 1) to (0,1)
-        img_pred = Image.fromarray((arr_pred*255 + 0.5).astype(np.uint8))
+        if pad_size > 0:
+            arr_pred = arr_pred[pad_size:-pad_size, pad_size:-pad_size, :]
+        arr_pred = (arr_pred+1) / 2  # normalized from (-1, 1) to (0,1)
+        arr_pred = ((arr_pred*255) + 0.5).astype(np.uint8)
+        print(arr_pred.shape, np.amin(arr_pred), np.amax(arr_pred))
+        img_pred = Image.fromarray(arr_pred)
         name = os.path.join(PATH_VAL, f'%04d.png'%(idx+801))
         img_pred.save(name)
-        exit()
+        # exit()
 
 def run():
 
