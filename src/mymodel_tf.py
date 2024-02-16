@@ -58,6 +58,8 @@ class GenerationTF():
             self.model = self.bwunet(self.input_shape)
         elif model_name == 'bwunet_delta':
             self.model = self.bwunet_delta(self.input_shape)
+        elif model_name == 'bwunet_small':
+            self.model = self.bwunet_small(self.input_shape)
         elif model_name == 'unet':
             self.model = self.unet_generator(self.input_shape)
         elif model_name == 'unetv2':
@@ -237,6 +239,7 @@ class GenerationTF():
                                              padding, activation=None, name=name)(x)
             enc = self._mynorm_layer(norm)(enc)
             enca = tf.keras.layers.PReLU(shared_axes=[1,2], name=name+'_prelu')(enc)
+            # enca = tf.keras.activations.swish('_swish')(enc)
 
             if pooling == 'max':
                 encp = tf.keras.layers.MaxPool2D(pool_size=2, strides=2, name=name+f'_{pooling}pooling')(enca)
@@ -322,6 +325,64 @@ class GenerationTF():
 
         return model
 
+
+    def bwunet_small(self, input_shape=(128, 128, 3), norm='batch'):
+        kernel_size = 3
+        filters = 16
+
+        input = tf.keras.layers.Input(shape=input_shape, name='bwunet_input')
+
+        emb, emba, embp = self._enc_block(filters, kernel_size, strides=1, pooling=None, norm=None, name='emb')(
+            input)  # (128, 128, 64)
+
+        # encoder
+        enc0, enc0a, enc0p = self._enc_block(filters * 2, kernel_size, strides=2, pooling=None, norm=None, name='enc0')(embp)  # (64, 64, 32)
+        enc1, enc1a, enc1p = self._enc_block(filters * 4, kernel_size, strides=2, pooling=None, norm=None, name='enc1')(enc0p)  # (32, 32, 64)
+        enc2, enc2a, enc2p = self._enc_block(filters * 8, kernel_size, strides=2, pooling=None, norm=None, name='enc2')(enc1p)  # (16, 16, 128)
+        enc3, enc3a, enc3p = self._enc_block(filters * 16, kernel_size, strides=2, pooling=None, norm=None, name='enc3')(enc2p)  # ( 8,  8, 256)
+
+
+        print('enc0', enc0.shape)
+        print('enc1', enc1.shape)
+        print('enc2', enc2.shape)
+        print('enc3', enc3.shape)
+        # flat
+
+        _, _, flat0p = self._enc_block(filters * 16, kernel_size, pooling=None, norm=None, name='flat0')(enc3p)  # ( 8,  8, 256)
+        _, _, flat1p = self._enc_block(filters * 16, kernel_size, pooling=None, norm=None, name='flat1')(flat0p) # ( 8,  8, 256)
+
+        print('flat0p', flat0p.shape)
+        print('flat1p', flat1p.shape)
+
+        # decoder
+        dec3 = self._dec_block(filters * 8, kernel_size, strides=2, norm=None, name='dec3')(flat1p,
+                                                                       enc2)  # (  8,   8, 256 ) -> (  16,  16, 512)
+        dec2 = self._dec_block(filters * 4, kernel_size, strides=2, norm=None, name='dec2')(dec3,
+                                                                      enc1)  # ( 16,  16,  512 ) -> (  32,  32, 256)
+        dec1 = self._dec_block(filters * 2, kernel_size, strides=2, norm=None, name='dec1')(dec2,
+                                                                      enc0)  # ( 32,  32,  256)  -> (  64,  64, 128)
+        dec0 = self._dec_block(filters * 1, kernel_size, strides=2, norm=None, name='dec0')(dec1,
+                                                                     emb)  # ( 64,  64,  128)  -> ( 128, 128,  64)
+        #
+        print('dec3', dec3.shape)
+        print('dec2', dec2.shape)
+        print('dec1', dec1.shape)
+        print('dec0', dec0.shape)
+
+
+        # # last
+        last1, last1a, last1p = self._enc_block(filters//2, kernel_size, pooling=None, name='last1')(dec0)
+
+        out = self.conv2d(filters=3, kernel_size=kernel_size, strides=1,
+                          padding='same', activation="tanh", name='last0')(last1p)
+        # out = out + input
+
+        # out = tf.keras.activations.tanh(out)
+
+        model = tf.keras.Model(inputs=input, outputs=out, name='bwunet_small')
+        # model = tf.keras.Model(inputs=input, outputs=dec0, name='bwunet')
+
+        return model
 
 
     def bwunet(self, input_shape=(128, 128, 3), norm='batch'):
@@ -487,7 +548,8 @@ def main():
 
     model_name = []
     # model_name.append('unetv2')
-    model_name.append('bwunet')
+    # model_name.append('bwunet')
+    model_name.append('bwunet_small')
     # model_name.append('bwunet_delta')
     # model_name.append('unet')
     # model_name.append('resnet_ed')
