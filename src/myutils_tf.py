@@ -68,6 +68,9 @@ class bwutils():
                 file_type='tfrecord',
                 patch_size:int=128,
                 crop_size:int=128,
+                batch_size:int=128,
+                lattice_fsize:int=3,
+                lattice_factor:float=1e-5,
                 input_max = 1.,
                 input_bits =16,
                 input_bias = True,
@@ -77,7 +80,8 @@ class bwutils():
                 beta_for_gamma = (1./2.2),
                 upscaling_factor=None,
                 upscaling_method='bilinear',
-                loss_type=['rgb', 'ploss'], # 'rgb', 'yuv', 'ploss', 'ssim'.
+                loss_type=['rgb', 'yuv'], # 'rgb', 'yuv', 'ploss', 'ssim'.
+                loss_weight={'rgb':1, 'yuv':1 },
                 loss_mode='2norm',
                 cache_enable=False):
 
@@ -92,7 +96,7 @@ class bwutils():
             raise ValueError('unknown cfa_pattern, ', cfa_pattern)
 
         for lt  in loss_type:
-            if lt not in ['rgb', 'yuv', 'ploss', 'ssim', 'dct']:
+            if lt not in ['rgb', 'yuv', 'ploss', 'ssim', 'dct', 'lattice', 'dir']:
                 raise ValueError('unknown loss type, ', lt)
 
         self.cfa_pattern = cfa_pattern
@@ -108,8 +112,10 @@ class bwutils():
         self.upscaling_factor = upscaling_factor
         self.upscaling_method = upscaling_method
         self.loss_type = loss_type
+        self.loss_weight = loss_weight
         self.loss_scale = loss_scale
         self.cache_enable = cache_enable
+        self.lattice_factor=lattice_factor
 
         self.input_type = input_type
         self.output_type = output_type
@@ -162,9 +168,6 @@ class bwutils():
                   (crop_size // 2 // cfa_pattern, crop_size // 2 // cfa_pattern))
 
 
-
-
-
         self.idx_RGB = np.concatenate((self.idx_R[..., np.newaxis],
                                        self.idx_G[..., np.newaxis],
                                        self.idx_B[..., np.newaxis]), axis=-1)
@@ -174,6 +177,50 @@ class bwutils():
                                           self.idx_B[..., np.newaxis],
                                           self.idx_G2[..., np.newaxis]), axis=-1)
 
+        # lattice loss
+        idx_fft=np.zeros((batch_size, 3, crop_size, crop_size//2+1), dtype=np.bool_)
+        period=cfa_pattern*2
+        for r in range(-(lattice_fsize//2), (lattice_fsize//2)+1):
+            for c in range(-(lattice_fsize//2), (lattice_fsize//2)+1):
+                if r<0: rpos=r+crop_size//period
+                else: rpos=r
+                if c<0: cpos=c+crop_size//period
+                else: cpos=c
+                idx_fft[:,:,rpos:crop_size//2+1:crop_size//period,cpos:crop_size//2+1:crop_size//period]=1
+        idx_fft[:,:,:(lattice_fsize)//2+1,:(lattice_fsize//2)+1]=0
+        self.tf_idx_fft=tf.cast(idx_fft, dtype=tf.bool)
+
+        # dir loss
+        filter_H_dir = np.zeros((5, 5,1,15), dtype=np.float32)
+        filter_V_dir = np.zeros((5, 5,1,15), dtype=np.float32)
+        filter_S_dir = np.zeros((5, 5,1,13), dtype=np.float32)
+        filter_B_dir = np.zeros((5, 5,1,13), dtype=np.float32)
+        filter_P_dir = np.zeros((5, 5,1,13), dtype=np.float32)
+
+        for r in range(1,4):
+            for c in range(5):
+                filter_H_dir[r,c,0,(r-1)*5+c]=1
+                filter_V_dir[c,r,0,(r-1)*5+c]=1
+
+        for r in range(5):
+            filter_S_dir[r,4-r,0,r]=1
+            filter_B_dir[r,r,0,r]=1
+            if r==4: continue
+            filter_S_dir[r,3-r,0,r+5]=1
+            filter_S_dir[r+1, 4 - r, 0, r + 9] = 1
+            filter_B_dir[r,r+1,0,r+5]=1
+            filter_B_dir[r+1,r,0,r+9]=1
+        cnt=0
+        for r in range(5):
+            for c in range(5):
+                if np.abs(r-2)+np.abs(c-2)>2: continue
+                filter_P_dir[r,c,0,cnt]=1
+                cnt+=1
+        self.tf_filter_H_dir = tf.cast(filter_H_dir, dtype=tf.float32)
+        self.tf_filter_V_dir = tf.cast(filter_V_dir, dtype=tf.float32)
+        self.tf_filter_S_dir = tf.cast(filter_S_dir, dtype=tf.float32)
+        self.tf_filter_B_dir = tf.cast(filter_B_dir, dtype=tf.float32)
+        self.tf_filter_P_dir = tf.cast(filter_P_dir, dtype=tf.float32)
 
         print('[bwutils] input_type', input_type)
         print('[bwutils] output_type', output_type)
@@ -183,6 +230,7 @@ class bwutils():
         print('[bwutils] upscaling_factor', upscaling_factor)
         print('[bwutils] input_max', input_max)
         print('[bwutils] loss_type', loss_type)
+        print('[bwutils] loss_weight', loss_weight)
         print('[bwutils] loss_mode', loss_mode, self.loss_norm)
         print('[bwutils] loss_scale', loss_scale)
         print('[bwutils] cache_enable', cache_enable)
@@ -538,8 +586,12 @@ class bwutils():
             loss += self.loss_fn_mse_rgb(y_true, y_pred)
         elif 'yuv' in self.loss_type:
             loss += self.loss_fn_mse_yuv(y_true, y_pred)
-        elif 'dct' in self.loss_type:
+        if 'dct' in self.loss_type:
             loss += self.loss_fn_dct_2d(y_true, y_pred)
+        if 'lattice' in self.loss_type:
+            loss += self.loss_fn_fft_lattice(y_true, y_pred)
+        if 'dir' in self.loss_type:
+            loss += self.loss_fn_dir_follow(y_true, y_pred)
 
 
         if 'ploss' in self.loss_type:
@@ -547,15 +599,19 @@ class bwutils():
         if 'ssim' in self.loss_type:
             loss += self.loss_fn_ssim(y_true, y_pred)
 
-        return loss * self.loss_scale
+        # return loss * self.loss_scale
+
+        return loss
 
 
     def loss_fn_mse_rgb(self, y_true, y_pred):
+        print('rgb')
         rgb_mse_loss = tf.keras.backend.mean(self.loss_norm(y_true - y_pred))
-        return rgb_mse_loss
+        return rgb_mse_loss * self.loss_weight['rgb']
 
 
     def loss_fn_mse_yuv(self, y_true, y_pred):
+        print('yuv')
         y_true_yuv = tf.image.rgb_to_yuv(y_true)
         y_pred_yuv = tf.image.rgb_to_yuv(y_pred)
 
@@ -564,10 +620,11 @@ class bwutils():
                     tf.keras.backend.mean(self.loss_norm(y_true_yuv - y_pred_yuv), axis=[0, 1, 2]),
                     tf.constant([1., 2., 2], dtype=tf.float32)))
 
-        return yuv_mse_loss
+        return yuv_mse_loss * self.loss_weight['yuv']
 
 
     def loss_fn_mse_rgb_yuv(self, y_true, y_pred):
+        print('rgb yuv')
         y_true_yuv = tf.image.rgb_to_yuv(y_true)
         y_pred_yuv = tf.image.rgb_to_yuv(y_pred)
 
@@ -577,26 +634,100 @@ class bwutils():
                     tf.keras.backend.mean(self.loss_norm(y_true_yuv - y_pred_yuv), axis=[0, 1, 2]),
                     tf.constant([1., 2., 2], dtype=tf.float32)))
 
-        return rgb_mse_loss + yuv_mse_loss
+        return (rgb_mse_loss + yuv_mse_loss) * self.loss_weight['rgb']
 
 
 
     def loss_fn_ssim(self, y_true, y_pred):
+        print('ssim')
         ssim_loss = 1. - tf.image.ssim(y_true, y_pred, 1)
         return ssim_loss
 
 
     def dct_2d(self, x):
-        # x0 = tf.transpose(x, [0,3,1,2])
+        #x0 = tf.transpose(x, [0,3,1,2])  #BHWC-> BCHW
         x1 = tf.signal.dct(tf.transpose(x, [0,3,1,2]))
         x2 = tf.signal.dct(tf.transpose(x1, [0,1,3,2]))
-        xf = tf.transpose(x2, [0,3,2,1] )
-        return xf
+        # xf = tf.transpose(x2, [0,3,2,1] )
+        return x2
     def loss_fn_dct_2d(self, y_true, y_pred):
+        print('dct2d')
         y_true_dct = self.dct_2d(y_true)
-        y_pred_dct = self.dct_2d(y_true)
+        y_pred_dct = self.dct_2d(y_pred)
+        return tf.keras.losses.MeanAbsoluteError()(y_true_dct, y_pred_dct) * self.loss_weight['dct']
 
-        return tf.keras.losses.MeanAbsoluteError()(y_true_dct, y_pred_dct)
+
+    def loss_fn_fft_lattice(self, y_true, y_pred):
+        print('lattice')
+        y_pred_fft_all=tf.signal.rfft2d(tf.transpose(y_pred, [0,3,1,2]))
+        y_pred_fft_ext=tf.boolean_mask(y_pred_fft_all, self.tf_idx_fft)
+        y_pred_fft_ext=tf.abs(y_pred_fft_ext)
+        out=self.lattice_factor*tf.reduce_mean(tf.square(y_pred_fft_ext))
+        return out * self.loss_weight['lattice']
+
+    def basis_cal_dir(self, data, filter):
+        return tf.nn.conv2d(data, filter, padding='VALID', strides=[1,1,1,1])
+    def single_channel_cal_dir(self, data):
+        H_vals = self.basis_cal_dir(data, self.tf_filter_H_dir)
+        V_vals = self.basis_cal_dir(data, self.tf_filter_V_dir)
+        S_vals = self.basis_cal_dir(data, self.tf_filter_S_dir)
+        B_vals = self.basis_cal_dir(data, self.tf_filter_B_dir)
+        P_vals = self.basis_cal_dir(data, self.tf_filter_P_dir)
+
+
+        H_vals = tf.math.reduce_variance(H_vals[:, :, :, 0:5], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(H_vals[:, :, :, 5:10], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(H_vals[:, :, :, 10:15], axis=-1, keepdims=True)
+
+        V_vals = tf.math.reduce_variance(V_vals[:, :, :, 0:5], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(V_vals[:, :, :, 5:10], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(V_vals[:, :, :, 10:15], axis=-1, keepdims=True)
+
+
+
+        B_vals = tf.math.reduce_variance(B_vals[:, :, :, 0:5], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(B_vals[:, :, :, 5:9], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(B_vals[:, :, :, 9:13], axis=-1, keepdims=True)
+
+        S_vals = tf.math.reduce_variance(S_vals[:, :, :, 0:5], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(S_vals[:, :, :, 5:9], axis=-1, keepdims=True) + \
+                 tf.math.reduce_variance(S_vals[:, :, :, 9:13], axis=-1, keepdims=True)
+
+        P_vals=tf.math.reduce_variance(P_vals)*3
+        HVSBP_vals=tf.concat([P_vals, H_vals, V_vals, S_vals, B_vals], axis=-1)
+        return HVSBP_vals
+    def loss_fn_dir_follow(self, y_true, y_pred):
+        print('dir')
+        R_true_HVSBP=self.single_channel_cal_dir(y_true[:,:,:,0:1])
+        G_true_HVSBP=self.single_channel_cal_dir(y_true[:,:,:,1:2])
+        B_true_HVSBP=self.single_channel_cal_dir(y_true[:,:,:,2:3])
+
+        R_pred_HVSBP=self.single_channel_cal_dir(y_pred[:,:,:,0:1])
+        G_pred_HVSBP=self.single_channel_cal_dir(y_pred[:,:,:,1:2])
+        B_pred_HVSBP=self.single_channel_cal_dir(y_pred[:,:,:,2:3])
+
+        idx_R_true=tf.argmin(R_true_HVSBP, axis=-1)
+        idx_R_true=tf.concat([tf.expand_dims(idx_R_true, axis=-1)==i for i in range(5)])
+        idx_R_true=tf.cast(idx_R_true, dtype=tf.bool)
+
+        R_true_vals = tf.boolean_mask(R_true_HVSBP, idx_R_true)
+        R_pred_vals = tf.boolean_mask(R_pred_HVSBP, idx_R_true)
+
+        G_true_vals = tf.boolean_mask(G_true_HVSBP, idx_R_true)
+        G_pred_vals = tf.boolean_mask(G_pred_HVSBP, idx_R_true)
+
+        B_true_vals = tf.boolean_mask(B_true_HVSBP, idx_R_true)
+        B_pred_vals = tf.boolean_mask(B_pred_HVSBP, idx_R_true)
+
+
+        out = 0
+        out += tf.reduce_mean(tf.square(R_true_vals - R_pred_vals))
+        out += tf.reduce_mean(tf.square(G_true_vals - G_pred_vals))
+        out += tf.reduce_mean(tf.square(B_true_vals - B_pred_vals))
+
+        return out * self.loss_weight['dir']
+
+
 
     def loss_fn_bayer(self, y_true, y_pred):
 

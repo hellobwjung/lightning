@@ -487,8 +487,8 @@ def main():
 
     model_name = []
     # model_name.append('unetv2')
-    # model_name.append('bwunet')
-    model_name.append('bwunet_delta')
+    model_name.append('bwunet')
+    # model_name.append('bwunet_delta')
     # model_name.append('unet')
     # model_name.append('resnet_ed')
     # model_name.append('resnet_flat')

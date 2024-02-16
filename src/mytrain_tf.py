@@ -65,7 +65,10 @@ def main(args):
 
 
     # loss_type = ['rgb', 'yuv', 'ploss'] # 'rgb', 'yuv', 'ploss'
-    loss_type = ['rgb', 'yuv', 'ssim', 'dct']  # 'rgb', 'yuv', 'ploss
+    loss_type   = ['rgb', 'yuv', 'ssim', 'dct', 'lattice']  # 'rgb', 'yuv', 'ploss
+    loss_weight = {'rgb':1, 'yuv':1, 'ssim':1, 'dct':0.01, 'lattice':1}  # 'rgb', 'yuv', 'ploss
+    # loss_type = ['rgb','yuv', 'ssim', 'dct', 'lattice', 'dir']  # 'rgb', 'yuv', 'ploss
+    # loss_type = ['rgb']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['rgb']  # 'rgb', 'yuv', 'ploss
     # loss_type = ['yuv']
 
@@ -77,8 +80,9 @@ def main(args):
                     crop_size=patch_size,
                     input_max=input_max,
                     loss_type=loss_type, # 'rgb', 'yuv', 'ploss'
+                    loss_weight = loss_weight,
                     loss_mode='2norm',
-                    loss_scale=1e4,
+                    loss_scale=1,
                     cache_enable=False)
 
 
@@ -171,14 +175,15 @@ def main(args):
     # strategy = tf.distribute.MirroredStrategy()
     # with strategy.scope():
 
-        if input_type not in ['shrink', 'nonshrink', 'nonshrink_4ch', 'rgb']:
+        if input_type not in ['shrink', 'nonshrink', 'nonshrink_4ch', 'rgb', 'dir']:
             raise ValueError('unkown input_type, ', input_type)
 
         #####################
         ## Get model gogo
         #####################
 
-        bw = GenerationTF(model_name = model_name, kernel_regularizer=True, kernel_constraint=True)
+        # bw = GenerationTF(model_name = model_name, kernel_regularizer=True, kernel_constraint=True)
+        bw = GenerationTF(model_name=model_name, kernel_regularizer=None, kernel_constraint=True)
 
         model = bw.model
         if False:
@@ -189,7 +194,23 @@ def main(args):
         optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, name='Adam')
         model.compile(optimizer=optimizer,  # 'adam',
                     loss=utils.loss_fn,  # 'mse',
-                    metrics=[utils.loss_fn])
+                    metrics=[utils.loss_fn_mse_rgb_yuv, utils.loss_fn_dct_2d,
+                      utils.loss_fn_ssim, utils.loss_fn_fft_lattice])
+
+
+        # model.compile(optimizer=optimizer,  # 'adam',
+        #           loss=utils.loss_fn,  # 'mse',
+        #           metrics=[utils.loss_fn_mse_rgb, utils.loss_fn_mse_yuv, utils.loss_fn_dct_2d,
+        #                    utils.loss_fn_ssim, utils.loss_fn_fft_lattice])
+
+
+        # model.compile(optimizer=optimizer,  # 'adam',
+        #           loss=utils.loss_fn,  # 'mse',
+        #           metrics=[utils.loss_fn_mse_rgb])
+
+        # model.compile(optimizer=optimizer,  # 'adam',
+        #           loss='mse',  # 'mse',
+        #           metrics=[utils.loss_fn_mse_rgb])
 
 
         ## load pre-trained model
